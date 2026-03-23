@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# mk42 : Génère un Makefile 42 (pur C ou pur C++)
+
+set -e
+
+CYAN="\e[36m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+RED="\e[31m"
+RESET="\e[0m"
+
+echo -e "${CYAN}🛠 MK42 — Makefile pur C / pur C++${RESET}\n"
+
+# ---------
+# Détection src/ ou .
+# ---------
+SRCDIR=""
+if ls src/*.c >/dev/null 2>&1 || ls src/*.cpp >/dev/null 2>&1; then
+  SRCDIR="src"
+elif ls *.c >/dev/null 2>&1 || ls *.cpp >/dev/null 2>&1; then
+  SRCDIR="."
+else
+  echo -e "${RED}❌ Aucun .c ou .cpp trouvé (ni ./src, ni .)${RESET}"
+  exit 1
+fi
+
+# ---------
+# Liste des sources
+# ---------
+SRCS_C=$(ls "$SRCDIR"/*.c 2>/dev/null | tr '\n' ' ' || true)
+SRCS_CPP=$(ls "$SRCDIR"/*.cpp 2>/dev/null | tr '\n' ' ' || true)
+
+has_c=0
+has_cpp=0
+[ -n "$SRCS_C" ] && has_c=1
+[ -n "$SRCS_CPP" ] && has_cpp=1
+
+# ---------
+# Refus si mix (pas d'hybride)
+# ---------
+if [ "$has_c" -eq 1 ] && [ "$has_cpp" -eq 1 ]; then
+  echo -e "${RED}❌ Mix détecté : .c ET .cpp. Tu as dit “pas d’hybride”.${RESET}"
+  echo -e "${YELLOW}➡️ Sépare le projet (ou supprime un des deux types) puis relance mk42.${RESET}"
+  echo -e "Trouvé .c   : $SRCS_C"
+  echo -e "Trouvé .cpp : $SRCS_CPP"
+  exit 1
+fi
+
+if [ "$has_c" -eq 0 ] && [ "$has_cpp" -eq 0 ]; then
+  echo -e "${RED}❌ Aucun fichier source détecté malgré la présence du dossier.${RESET}"
+  exit 1
+fi
+
+# ---------
+# Nom binaire
+# ---------
+read -p "$(echo -e "${GREEN}Nom du programme (défaut : a.out) : ${RESET}")" NAME
+NAME=${NAME:-a.out}
+
+# Vérif Makefile existant
+if [ -f Makefile ]; then
+  echo -e "${YELLOW}⚠️ Makefile existe déjà. Il sera remplacé. Continuer ? (y/N)${RESET}"
+  read -r confirm
+  if [[ ! "$confirm" =~ ^[yY]$ ]]; then
+    echo -e "${RED}Annulé.${RESET}"
+    exit 1
+  fi
+fi
+
+# ---------
+# Génération selon type
+# ---------
+if [ "$has_c" -eq 1 ]; then
+  SRCS=$(echo "$SRCS_C" | xargs)
+  MAKEFILE_CONTENT=$(cat <<EOF
+NAME    = $NAME
+CC      = cc
+CFLAGS  = -Wall -Wextra -Werror
+
+SRCS    = $SRCS
+OBJS    = \$(SRCS:.c=.o)
+
+all: \$(NAME)
+
+\$(NAME): \$(OBJS)
+	\$(CC) \$(CFLAGS) \$(OBJS) -o \$(NAME)
+
+clean:
+	rm -f \$(OBJS)
+
+fclean: clean
+	rm -f \$(NAME)
+
+re: fclean all
+
+.PHONY: all clean fclean re
+EOF
+)
+  PROJECT_TYPE="C"
+
+else
+  SRCS=$(echo "$SRCS_CPP" | xargs)
+  MAKEFILE_CONTENT=$(cat <<EOF
+NAME     = $NAME
+CXX      = c++
+CXXFLAGS = -Wall -Wextra -Werror -std=c++98
+
+SRCS     = $SRCS
+OBJS     = \$(SRCS:.cpp=.o)
+
+all: \$(NAME)
+
+\$(NAME): \$(OBJS)
+	\$(CXX) \$(CXXFLAGS) \$(OBJS) -o \$(NAME)
+
+clean:
+	rm -f \$(OBJS)
+
+fclean: clean
+	rm -f \$(NAME)
+
+re: fclean all
+
+.PHONY: all clean fclean re
+EOF
+)
+  PROJECT_TYPE="C++"
+fi
+
+echo -e "\n${CYAN}📄 Aperçu du Makefile ($PROJECT_TYPE) :${RESET}"
+echo "-------------------------------------------"
+echo "$MAKEFILE_CONTENT"
+echo "-------------------------------------------"
+
+echo -e "\n${YELLOW}⏳ Génération dans 3 secondes… (Ctrl+C pour annuler)${RESET}"
+sleep 3
+
+echo "$MAKEFILE_CONTENT" > Makefile
+
+echo -e "\n${GREEN}✔ Makefile généré (pur $PROJECT_TYPE) !${RESET}"
+echo -e "${GREEN}Binaire :${RESET} $NAME"
+echo -e "${GREEN}Sources :${RESET} $SRCS"
+

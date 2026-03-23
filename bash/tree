@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# Faux "tree" perso avec mini-ls + arbre emoji
+
+set -o pipefail
+
+# ====== CONFIG ======
+MAX_DEPTH=2      # profondeur max de l'arbre
+SHOW_HIDDEN=0    # 1 = inclure fichiers cachés, 0 = les ignorer
+
+# ====== COULEURS ======
+if [[ -t 1 ]] && command -v tput >/dev/null 2>&1 && tput colors >/dev/null 2>&1; then
+    RESET="$(tput sgr0)"
+    BOLD="$(tput bold)"
+    DIM="$(printf '\e[2m')"
+
+    COL_DIR="$(tput setaf 5)${BOLD}"   # violet foncé gras
+    COL_FILE="$(tput setaf 5)"         # violet normal
+    COL_EXEC="$(tput setaf 1)"         # rouge
+    COL_CFILE="$(tput setaf 4)"        # bleu
+    COL_MAKE="$(tput setaf 3)"         # jaune/orange
+    COL_GIT="$(tput setaf 2)"          # vert
+else
+    RESET=""
+    BOLD=""
+    DIM=""
+    COL_DIR=""
+    COL_FILE=""
+    COL_EXEC=""
+    COL_CFILE=""
+    COL_MAKE=""
+    COL_GIT=""
+fi
+
+# ====== ICONES / EMOJIS ======
+DIR_ICON="📁"
+FILE_ICON="📄"
+EXEC_ICON="⚙️"
+C_ICON="📘"
+MK_ICON="🧱"
+GIT_ICON="🌿"
+
+# ---------- Utilitaires ----------
+
+format_entry() {
+    # $1 = chemin complet, $2 = nom affiché
+    local full="$1"
+    local name="$2"
+    local icon="$FILE_ICON"
+    local color="$COL_FILE"
+
+    if [[ -d "$full" ]]; then
+        icon="$DIR_ICON"
+        color="$COL_DIR"
+    elif [[ "$name" == "Makefile" || "$name" == "makefile" ]]; then
+        icon="$MK_ICON"
+        color="$COL_MAKE"
+    elif [[ "$name" == *.c ]]; then
+        icon="$C_ICON"
+        color="$COL_CFILE"
+    elif [[ "$name" == .git ]]; then
+        icon="$GIT_ICON"
+        color="$COL_GIT"
+    elif [[ -x "$full" && ! -d "$full" ]]; then
+        icon="$EXEC_ICON"
+        color="$COL_EXEC"
+    fi
+
+    printf '%b%s %s%b' "$color" "$icon" "$name" "$RESET"
+}
+
+# Mini-ls au début : sobre, mais stylé
+mini_ls() {
+    local dir="$PWD"
+    local -a entries
+    local name
+
+    # Récupérer entrées (sans plantage si vide)
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        if (( SHOW_HIDDEN == 0 )) && [[ "$name" == .* ]]; then
+            continue
+        fi
+        entries+=("$name")
+    done < <(LC_ALL=C ls -A1 "$dir" 2>/dev/null || true)
+
+    local total="${#entries[@]}"
+    local dirs=0 files=0
+
+    for name in "${entries[@]}"; do
+        if [[ -d "$dir/$name" ]]; then
+            ((dirs++))
+        else
+            ((files++))
+        fi
+    done
+
+    # Header minimaliste
+    local date_line
+    date_line="$(date +'%d %b %Y • %H:%M')"
+
+    printf "%s%s%s\n" "$BOLD" "$dir" "$RESET"
+    printf "%b📆 %s  •  📁 %d  •  📄 %d%b\n" "$DIM" "$date_line" "$dirs" "$files" "$RESET"
+
+    # Afficher quelques entrées (max 8)
+    local max_show=8
+    (( total < max_show )) && max_show="$total"
+
+    if (( max_show > 0 )); then
+        printf "\n"
+        local i=0
+        while (( i < max_show )); do
+            name="${entries[i]}"
+            format_entry "$dir/$name" "$name"
+            printf "   "
+            ((i++))
+        done
+        printf "\n"
+    fi
+
+    printf "\n"
+}
+
+# Fonction récursive pour afficher l'arbre
+print_tree() {
+    local dir="$1"
+    local prefix="$2"
+    local depth="$3"
+
+    if (( depth > MAX_DEPTH )); then
+        return
+    fi
+
+    local -a dirs files entries
+    local name
+
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        if (( SHOW_HIDDEN == 0 )) && [[ "$name" == .* ]]; then
+            continue
+        fi
+
+        if [[ -d "$dir/$name" ]]; then
+            dirs+=("$name")
+        else
+            files+=("$name")
+        fi
+    done < <(LC_ALL=C ls -A1 "$dir" 2>/dev/null || true)
+
+    entries=( "${dirs[@]}" "${files[@]}" )
+    local count="${#entries[@]}"
+    (( count == 0 )) && return
+
+    local i=0
+    for name in "${entries[@]}"; do
+        ((i++))
+        local full="$dir/$name"
+        local is_last=0
+        (( i == count )) && is_last=1
+
+        local connector branch_prefix
+        if (( is_last )); then
+            connector="└── "
+            branch_prefix="${prefix}    "
+        else
+            connector="├── "
+            branch_prefix="${prefix}│   "
+        fi
+
+        printf "%s%s" "$prefix" "$connector"
+        format_entry "$full" "$name"
+        printf "\n"
+
+        if [[ -d "$full" ]]; then
+            print_tree "$full" "$branch_prefix" $((depth + 1))
+        fi
+    done
+}
+
+# ============ MAIN ============
+
+# Option simple : -a pour montrer les fichiers cachés, -dN pour la profondeur
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -a|--all)
+            SHOW_HIDDEN=1
+            shift
+            ;;
+        -d|--depth)
+            MAX_DEPTH="$2"
+            shift 2
+            ;;
+        *)
+            # on ignore les autres options pour garder ça simple
+            shift
+            ;;
+    esac
+done
+
+mini_ls
+
+format_entry "$PWD" "."
+printf "\n"
+print_tree "$PWD" "" 1
+

@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# header42 : insère un header 42 au début d'un fichier C/C++
+# - Vérifie l'extension (C/C++)
+# - Écrit le header dans le fichier (en le créant au besoin)
+# - Si le fichier existe, le contenu est décalé après le header
+
+CYAN="\e[36m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+RED="\e[31m"
+RESET="\e[0m"
+
+filename="$1"
+
+if [ -z "$filename" ]; then
+    echo -e "${RED}Usage: header42 <fichier.c|.h|.cpp|.hpp|.cc|.hh|.cxx|.hxx>${RESET}"
+    exit 1
+fi
+
+# Vérifie que ce n'est pas un répertoire
+if [ -d "$filename" ]; then
+    echo -e "${RED}Erreur : '$filename' est un répertoire, pas un fichier.${RESET}"
+    exit 1
+fi
+
+# Vérification de l'extension
+case "$filename" in
+    *.c|*.h|*.cc|*.hh|*.cpp|*.hpp|*.cxx|*.hxx)
+        ;;
+    *)
+        echo -e "${RED}Erreur : ce script ne fonctionne que sur des fichiers C/C++ (.c .h .cc .hh .cpp .hpp .cxx .hxx).${RESET}"
+        exit 1
+        ;;
+esac
+
+user="$(whoami)"
+date_str="$(date +"%Y/%m/%d %H:%M:%S")"
+base="$(basename "$filename")"
+
+echo -e "${CYAN}📝 HEADER42 — Insertion de header dans :${RESET} $filename"
+echo -e "${GREEN}Utilisateur :${RESET} $user"
+echo -e "${GREEN}Date       :${RESET} $date_str"
+echo
+echo -e "${YELLOW}Le fichier sera modifié (header ajouté en haut). Lancement dans 3 secondes… (Ctrl+C pour annuler)${RESET}"
+sleep 3
+
+tmpfile="$(mktemp)" || {
+    echo -e "${RED}Erreur : impossible de créer un fichier temporaire.${RESET}"
+    exit 1
+}
+
+# Génération du header dans le fichier temporaire
+{
+    printf "/* ************************************************************************** */\n"
+    printf "/*                                                                            */\n"
+    printf "/*                                                        :::      ::::::::   */\n"
+    printf "/*   %s%s\n" "$base" "                                       :+:      :+:    :+:   */"
+    printf "/*                                                    +:+ +:+         +:+     */\n"
+    printf "/*   By: %s <%s@student.42.fr>%s#+#  +:+       +#+        */\n" "$user" "$user" "              "
+    printf "/*                                                +#+#+#+#+#+   +#+           */\n"
+    printf "/*   Created: %s by %s%s#+#    #+#             */\n" "$date_str" "$user" "                     "
+    printf "/*   Updated: %s by %s%s###   ########.fr       */\n" "$date_str" "$user" "                    "
+    printf "/*                                                                            */\n"
+    printf "/* ************************************************************************** */\n"
+    printf "\n"
+} >> "$tmpfile"
+
+# Si le fichier existe déjà, on colle son contenu après le header
+if [ -f "$filename" ]; then
+    cat "$filename" >> "$tmpfile"
+fi
+
+# On remplace l'ancien fichier par la version avec header
+mv "$tmpfile" "$filename"
+
+echo -e "${GREEN}✔ Header 42 inséré dans '$filename'.${RESET}"
+

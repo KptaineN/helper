@@ -1,0 +1,45 @@
+#put this into your .zshrc or .bash 
+
+translate() {
+  if [ $# -eq 0 ]; then
+    echo "Usage: translate <text>"
+    return 1
+  fi
+
+  # récupère tout l'argument, et remplace les retours ligne / tabs par espaces
+  text=$(printf "%s" "$*" | tr '\n\t\r' '   ')
+
+  # 1) requête vers FR (sert aussi à détecter la langue)
+  res=$(curl -s --get --data-urlencode "q=$text" \
+    "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=fr&dt=t")
+
+  if [ -z "$res" ]; then
+    echo "Erreur : réponse vide (réseau ?)."
+    return 1
+  fi
+
+  # détecter la langue source (sans crash : json.loads sur stdin)
+  src_lang=$(printf "%s" "$res" | python3 -c '
+import sys, json
+s=sys.stdin.read()
+try:
+  j=json.loads(s)
+  print(j[2] if len(j)>2 else "")
+except Exception:
+  print("")
+')
+
+  # si FR → traduire vers EN
+  if [[ "$src_lang" == fr* ]]; then
+    res=$(curl -s --get --data-urlencode "q=$text" \
+      "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t")
+  fi
+
+  # concatène tous les segments (sans crash)
+  printf "%s" "$res" | python3 -c '
+import sys, json
+s=sys.stdin.read()
+j=json.loads(s)
+print("".join(seg[0] for seg in j[0] if seg and seg[0]))
+'
+}
