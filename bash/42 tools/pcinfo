@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+
+# ===============================
+#   INXI DEBUGGER MAISON v1.0
+# ===============================
+
+clear
+
+RED="\033[1;31m"
+GREEN="\033[1;32m"
+YELLOW="\033[1;33m"
+BLUE="\033[1;34m"
+CYAN="\033[1;36m"
+WHITE="\033[1;37m"
+RESET="\033[0m"
+
+banner()
+{
+	echo -e "${CYAN}"
+	echo "======================================"
+	echo "         INXI DEBUGGER MAISON         "
+	echo "======================================"
+	echo -e "${RESET}"
+}
+
+choose_detail()
+{
+	echo -e "${YELLOW}Choix niveau détail :${RESET}"
+	echo "0) Normal"
+	echo "1) x"
+	echo "2) xx"
+	echo "3) xxx"
+	read -rp "Choix : " d
+
+	case "$d" in
+		1) DETAIL="x" ;;
+		2) DETAIL="xx" ;;
+		3) DETAIL="xxx" ;;
+		*) DETAIL="" ;;
+	esac
+}
+
+choose_hide()
+{
+	echo
+	read -rp "Masquer infos sensibles ? (o/n) : " h
+
+	case "$h" in
+		o|O|y|Y) HIDE="z" ;;
+		*) HIDE="" ;;
+	esac
+}
+
+run_cmd()
+{
+	CMD="$1"
+	echo
+	echo -e "${GREEN}>>> Lancement : inxi -${CMD}${DETAIL}${HIDE}${RESET}"
+	echo
+	inxi -"${CMD}${DETAIL}${HIDE}"
+	echo
+	read -rp "Entrée pour continuer..."
+}
+
+menu()
+{
+	while true
+	do
+		clear
+		banner
+		echo -e "${WHITE}Choisis une commande :${RESET}"
+		echo
+		echo "1) SYSTEME        -> inxi -S"
+		echo "2) BATTERIE       -> inxi -B"
+		echo "3) GRAPHICS       -> inxi -G"
+		echo "4) CPU            -> inxi -C"
+		echo "5) RAM            -> inxi -m"
+		echo "6) DISQUES        -> inxi -D"
+		echo "7) RESEAU         -> inxi -N"
+		echo "8) AUDIO          -> inxi -A"
+		echo "9) TEMP           -> inxi -s"
+		echo "10) FULL REPORT   -> inxi -F"
+		echo "11) TOP PROCESS   -> inxi -t cm10"
+		echo "0) Quitter"
+		echo
+		read -rp "Choix : " c
+
+		case "$c" in
+			1) run_cmd "S" ;;
+			2) run_cmd "B" ;;
+			3) run_cmd "G" ;;
+			4) run_cmd "C" ;;
+			5) run_cmd "m" ;;
+			6) run_cmd "D" ;;
+			7) run_cmd "N" ;;
+			8) run_cmd "A" ;;
+			9) run_cmd "s" ;;
+			10) run_cmd "F" ;;
+			11)
+				echo
+				echo -e "${GREEN}>>> Lancement : inxi -t cm10${RESET}"
+				echo
+				inxi -t cm10
+				echo
+				read -rp "Entrée pour continuer..."
+				;;
+			0) clear; exit ;;
+			*) echo "Choix invalide"; sleep 1 ;;
+		esac
+	done
+}
+
+choose_detail
+choose_hide
+menu
